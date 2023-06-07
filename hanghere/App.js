@@ -11,7 +11,17 @@ import axios from 'axios';
 import cheerio from 'cheerio';
 import Geocoder from 'react-native-geocoding';
 import MapView, { Marker } from 'react-native-maps';
+import Realm from "realm";
 
+class Profile extends Realm.Object {
+  static schema = {
+    name: 'Profile',
+    properties: {
+      _id: 'objectId',
+      name: 'string',
+    }
+  };
+}
 
 const CustomArrowComponent = ({ direction }) => {
   const icon = direction === 'left' ? 'chevron-back' : 'chevron-forward';
