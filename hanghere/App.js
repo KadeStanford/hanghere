@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, Image, ImageBackground, TextInput, TouchableOpacity, FlatList } from 'react-native';
+import { StyleSheet, Text, View, Image, ImageBackground, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Calendar } from 'react-native-calendars';
@@ -11,17 +11,30 @@ import axios from 'axios';
 import cheerio from 'cheerio';
 import Geocoder from 'react-native-geocoding';
 import MapView, { Marker } from 'react-native-maps';
-import Realm from "realm";
+import firebase from 'firebase/app';
+import 'firebase/database';
+import auth from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword} from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, collectionGroup, query, getDoc, updateDoc, useDoc, onSnapshot } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
+import { firestore } from 'firebase/firestore';
 
-class Profile extends Realm.Object {
-  static schema = {
-    name: 'Profile',
-    properties: {
-      _id: 'objectId',
-      name: 'string',
-    }
-  };
-}
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA1dX3F9-U6Z0rE6emqlRwobziW53IJWVw",
+  authDomain: "master-inn-388700.firebaseapp.com",
+  projectId: "master-inn-388700",
+  storageBucket: "master-inn-388700.appspot.com",
+  messagingSenderId: "429119430572",
+  appId: "1:429119430572:web:509162fa32607290aa2409",
+  measurementId: "G-M9MMK7SH78"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
 
 const CustomArrowComponent = ({ direction }) => {
   const icon = direction === 'left' ? 'chevron-back' : 'chevron-forward';
@@ -210,12 +223,13 @@ const CalendarScreen = () => {
         <TouchableOpacity onPress={() => { navigation.navigate('Map', { events: events }); }} style={styles.buttonBar}>
           <Text style={styles.buttonTextbar}>Map</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { navigation.navigate('Login'); }} style={styles.buttonBar}>
-          <Text style={styles.buttonTextbar}>Login</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { navigation.navigate('Logged In'); }} style={styles.buttonBar}>
+        <TouchableOpacity onPress={() => { navigation.navigate('Logged In'); }} style={styles.buttonBarSelected}>
           <Text style={styles.buttonTextbar}>Calendar</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => { navigation.navigate('Friends'); }} style={styles.buttonBar}>
+          <Text style={styles.buttonTextbar}>Friends</Text>
+        </TouchableOpacity>
+
       </View>
 
       <StatusBar style="auto" />
@@ -227,15 +241,21 @@ const LoginScreen = () => {
   const navigation = useNavigation();
   const usernameRef = useRef('');
   const passwordRef = useRef('');
+  const auth = getAuth(app);
 
-  const handleLogin = () => {
+ const handleLogin = async () => {
+  try {
     const username = usernameRef.current;
     const password = passwordRef.current;
 
-    if (username === 'admin' && password === 'admin') {
-      navigation.navigate('Logged In');
-    }
-  };
+    const userCredential = await signInWithEmailAndPassword(auth, username, password);
+    const user = userCredential.user;
+    console.log("Logged in user:", user);
+    navigation.navigate('Logged In');
+  } catch (error) {
+    console.error("Error logging in:", error);
+  }
+};
 
   return (
     <ImageBackground source={require('./images/bglines.png')} style={styles.container}>
@@ -258,9 +278,174 @@ const LoginScreen = () => {
       <TouchableOpacity onPress={handleLogin} style={styles.button}>
         <Text style={styles.buttonText}>Login</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.button}>
+  <Text style={styles.buttonText}>Signup</Text>
+</TouchableOpacity>
+
+
     </ImageBackground>
   );
 };
+
+const SignupScreen = () => {
+  const navigation = useNavigation();
+  const usernameRef = useRef('');
+  const passwordRef = useRef('');
+  const auth = getAuth(app);
+
+  const handleSignup = async () => {
+    try {
+      const username = usernameRef.current;
+      const password = passwordRef.current;
+
+      // Implement your signup logic using Firebase authentication
+      // Example:
+      await createUserWithEmailAndPassword(auth, username, password);
+
+      // Get the authenticated user's email and UID
+      const user = auth.currentUser;
+      const email = user.email;
+      const uid = user.uid;
+
+      // Create a new document in Firestore for the user
+      const firestore = getFirestore(app);
+      const usersCollectionRef = collection(firestore, 'userData');
+      const userDocRef = doc(usersCollectionRef, email); // Use email as document ID
+      const userData = {
+        username,
+        email,
+        uid,
+        friendList: [], // Initialize friendList as an empty array
+      };
+
+      await setDoc(userDocRef, userData);
+
+      // Navigate to the logged-in screen after successful signup
+      navigation.navigate('Logged In');
+    } catch (error) {
+      console.error("Error signing up:", error);
+    }
+  };
+
+  return (
+    <ImageBackground source={require('./images/bglines.png')} style={styles.container}>
+      <Text style={styles.headertext}>HangHere</Text>
+      <StatusBar style="auto" />
+      <Image style={styles.logo} source={require('./images/hangherelogo.png')} />
+      <Text style={styles.smalltext}>Create an Account!</Text>
+      <TextInput
+        style={styles.inputuser}
+        placeholder="Email"
+        placeholderTextColor="#9d5dfe"
+        onChangeText={(text) => (usernameRef.current = text)}
+      />
+            <TextInput
+        style={{    height: 40,
+          width: 300,
+          borderColor: '#4d25ef',
+          borderWidth: 3,
+          marginTop: -20,
+          borderRadius: 10,
+          paddingLeft: 10,
+          backgroundColor: '#ffffff',}}
+        placeholder="Email"
+        placeholderTextColor="#9d5dfe"
+        onChangeText={(text) => (usernameRef.current = text)}
+      />
+      <TextInput
+        style={styles.inputpass}
+        placeholder="Password"
+        placeholderTextColor="#9d5dfe"
+        secureTextEntry={true}
+        onChangeText={(text) => (passwordRef.current = text)}
+      />
+      <TouchableOpacity onPress={handleSignup} style={styles.button}>
+        <Text style={styles.buttonText}>Signup</Text>
+      </TouchableOpacity>
+    </ImageBackground>
+  );
+};
+
+const FriendsScreen = () => {
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    // Get the current user's email
+    const auth = getAuth(app);
+    const user = auth.currentUser;
+    if (user) {
+      setCurrentUserEmail(user.email);
+    }
+  }, []);
+
+  const handleSearch = async () => {
+    const app = initializeApp(firebaseConfig);
+    const firestore = getFirestore(app);
+    const usersCollectionRef = collection(firestore, 'userData');
+    const userDocRef = doc(usersCollectionRef, searchEmail);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      const userData = userDocSnap.data();
+      setSearchResult(userData);
+    } else {
+      setSearchResult(null);
+    }
+  };
+
+  const handleAddFriend = async () => {
+    const app = initializeApp(firebaseConfig);
+    const firestore = getFirestore(app);
+    const userDocRef = doc(collection(firestore, 'userData'), currentUserEmail);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      const userData = userDocSnap.data();
+      const updatedFriendList = [...userData.friendList, searchResult.email];
+
+      await userDocRef.update({
+        friendList: updatedFriendList,
+      });
+
+      // Optionally, you can display a success message or navigate to a different screen here
+      console.log('Friend added successfully!');
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.inputFriend}
+        value={searchEmail}
+        onChangeText={setSearchEmail}
+        placeholder="Enter email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        placeholderTextColor="#9d5dfe"
+      />
+      <TouchableOpacity style={styles.button} onPress={handleSearch}>
+        <Text style={styles.buttonText}>Search</Text>
+      </TouchableOpacity>
+
+      {searchResult && (
+        <View>
+          <Text>Search Result:</Text>
+          <Text>Email: {searchResult.email}</Text>
+          <Text>UID: {searchResult.uid}</Text>
+          <TouchableOpacity style={styles.button} onPress={handleAddFriend}>
+            <Text style={styles.buttonText}>Add Friend</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
+
 
 
 const MapScreen = ({ route }) => {
@@ -311,15 +496,16 @@ const MapScreen = ({ route }) => {
         </MapView>
       )}
              <View style={styles.menuBar}>
-        <TouchableOpacity onPress={() => { navigation.navigate('Map', { events: events }); }} style={styles.buttonBar}>
+        <TouchableOpacity onPress={() => { navigation.navigate('Map', { events: events }); }} style={styles.buttonBarSelected}>
           <Text style={styles.buttonTextbar}>Map</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { navigation.navigate('Login'); }} style={styles.buttonBar}>
-          <Text style={styles.buttonTextbar}>Login</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => { navigation.navigate('Logged In'); }} style={styles.buttonBar}>
           <Text style={styles.buttonTextbar}>Calendar</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => { navigation.navigate('Friends'); }} style={styles.buttonBar}>
+          <Text style={styles.buttonTextbar}>Friends</Text>
+        </TouchableOpacity>
+
       </View>
     </View>
   );
@@ -328,9 +514,13 @@ const MapScreen = ({ route }) => {
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const app = initializeApp(firebaseConfig);
+  
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
   useEffect(() => {
+    
+
     const loadAppFonts = async () => {
       await loadFonts();
       setFontsLoaded(true);
@@ -347,7 +537,9 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} /> 
         <Stack.Screen name="Logged In" component={CalendarScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Friends" component={FriendsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Map" component={MapScreen} options={{ headerShown: false }} />
      
       </Stack.Navigator>
@@ -386,6 +578,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#4d25ef',
     alignContent: 'center',
   },
+  buttonBarSelected: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#3c17d1',
+    width: '3%',
+    borderRadius: 10,
+    height: '50%',
+  },
   buttonBar: {
     flex: 1,
     justifyContent: 'center',
@@ -409,7 +610,7 @@ const styles = StyleSheet.create({
   headertext: {
     fontFamily: 'BowlbyOneSC-Regular',
     fontSize: 50,
-    marginTop: 90,
+    marginTop: 50,
     color: '#ffffff',
   },
   text: {
@@ -506,5 +707,46 @@ const styles = StyleSheet.create({
     fontFamily: 'BowlbyOneSC-Regular',
     textAlign: 'center',
   },
+  smalltext: {
+    fontSize: 20,
+    fontFamily: 'BowlbyOneSC-Regular',
+    textAlign: 'center',
+    marginTop: -35,
+    marginBottom: 20,
+    color: '#ffffff',
+  },
+  inputFriend: {
+    height: 40,
+    width: 300,
+    borderColor: '#4d25ef',
+    borderWidth: 3,
+    marginTop: 50,
+    borderRadius: 10,
+    paddingLeft: 10,
+    backgroundColor: '#ffffff',
+  },
+  results: {
+    fontSize: 20,
+    fontFamily: 'BowlbyOneSC-Regular',
+    textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    color: '#ffffff',
+  },
+  searchText : {  
+    fontSize: 20,
+    fontFamily: 'BowlbyOneSC-Regular',
+    textAlign: 'center',
+    marginTop: 80,
+    color: '#ffffff',
+  },
+  searchButton: {
+    backgroundColor: '#4d25ef',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 20,
+  },
+
 
 });
